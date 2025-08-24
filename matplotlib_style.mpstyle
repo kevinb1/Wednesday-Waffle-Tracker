@@ -1,0 +1,22 @@
+# === Font ===
+font.family : DejaVu Sans
+
+# === Transparent background ===
+figure.facecolor : none
+axes.facecolor   : none
+savefig.facecolor: none
+
+# === Text & axis color ===
+text.color       : white
+axes.labelcolor  : white
+axes.edgecolor   : white
+xtick.color      : white
+ytick.color      : white
+
+# === Line style ===
+axes.linewidth   : 1.2
+lines.linewidth  : 2
+lines.markersize : 6
+
+# === dpi ===
+figure.dpi       : 120
