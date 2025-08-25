@@ -48,27 +48,28 @@ if "wednesdays" not in st.session_state:
     st.session_state.wednesdays = count_wednesdays(start_date)
 
 if "persons" not in st.session_state:
-    try:
-        with open("persons.json") as f:
-            st.session_state.persons = json.load(f)
-    except FileNotFoundError:
-        st.session_state.persons = []
+    usernames_dict = st.secrets["credentials"]["usernames"]
+
+    # Build a dictionary with extra fields
+    persons = {
+        person: {
+            "name": usernames_dict[person]["name"],
+            "color": usernames_dict[person].get("color", "not set"),
+            "instagram": usernames_dict[person].get("instagram", "not set")
+        }
+        for person in usernames_dict
+    }
+    st.session_state.persons = persons
 
 if "events" not in st.session_state:
-    try:
-        with open("calendar_events.json", "r", encoding="utf-8") as f:
-            content = f.read()
-            st.session_state.events = json.loads(
-                content) if content.strip() else []
-    except FileNotFoundError:
         st.session_state.events = []
 
-# --- Load calendar options and CSS ---
-with open("calendar_options.json") as f:
-    calendar_options = json.load(f)
+# # --- Load calendar options and CSS ---
+# with open("calendar_options.json") as f:
+#     calendar_options = json.load(f)
 
-with open("custom.css") as f:
-    custom_css = f.read()
+# with open("custom.css") as f:
+#     custom_css = f.read()
 
 # --- Helper: preload and cache images locally ---
 IMAGE_DIR = "cached_images"
@@ -88,16 +89,17 @@ def get_local_image(person):
 
 # --- Sidebar for navigation ---
 with st.sidebar:
+    st.header("Options and Navigation")
     go_back = st.button("Go to Login")
     if go_back:
         st.switch_page("main.py")
-    # st.header(f"Fakka {st.session_state['name']}")
 
 
 # --- File upload and processing inside a form to avoid reruns ---
 with st.form("chat_form"):
     chat_file = st.file_uploader("Upload WhatsApp chat export", type=["txt"])
     submit = st.form_submit_button("Process Chat")
+    st.session_state.chat_file = chat_file
 
     if submit:
         if chat_file is None:
@@ -109,15 +111,11 @@ with st.form("chat_form"):
             df = load_chat(chat_file, pattern)
             df = find_chat_object(
                 df, "Video note", start_date=st.session_state.start_date_waffles)
-            df_to_json(df, "persons.json", "calendar_events.json")
+            
+            events_json = df_to_json(df, st.session_state.persons, st.session_state.events)
 
-            # Update session state
-            with open("persons.json") as f:
-                st.session_state.persons = json.load(f)
-            with open("calendar_events.json", "r", encoding="utf-8") as f:
-                content = f.read()
-                st.session_state.events = json.loads(
-                    content) if content.strip() else []
+            # Update session states.json", "r", encoding="utf-8") as f:
+            st.session_state.events = events_json
 
             msg = st.success("Waffles added to database")
             time.sleep(3)
@@ -133,7 +131,7 @@ if n > 0:
     # st.pyplot(fig)
 
     events_loaded = False
-    if "events" in st.session_state and st.session_state.events:
+    if "events" in st.session_state and st.session_state.events and "chat_file" in st.session_state:
         events_loaded = True
         df_waffles = pd.DataFrame(st.session_state.events)
         df_waffles.drop(columns=["end"], inplace=True)
@@ -189,16 +187,19 @@ if n > 0:
         
         sort_order_reverse = {i : -i for i in range(n)}
 
-    punishments = {}
+        punishments = {}
+    else:
+        sort_order = st.session_state.persons
+        
     for  i, name  in enumerate(sort_order):
-        j, person = next((i, p) for i, p in enumerate(st.session_state.persons) if p["name"] == name)
-        local_image_path = get_local_image(st.session_state.persons[j])
+        person  = st.session_state.persons[name]
+        local_image_path = get_local_image(person)
         img = Image.open(local_image_path)
         cols[i].image(img, use_container_width=True)
         cols[i].markdown(
             f"""
                 <div style="display:flex; align-items:center; gap:6px;">
-                    <div style="width:14px; height:14px; border-radius:50%; background:{st.session_state.persons[i]['color']};"></div>
+                    <div style="width:14px; height:14px; border-radius:50%; background:{person['color']};"></div>
                     <span><b>{name}</b></span>
                 </div>
                 """,
@@ -207,7 +208,7 @@ if n > 0:
 
         if events_loaded:
             filtered_df = df_waffles_grouped[df_waffles_grouped["title"]
-                                             == name]
+                                            == name]
 
             # Count valid Wednesday waffles
             on_time_waffles = np.sum(
@@ -229,47 +230,47 @@ if n > 0:
                 delta_color="normal"
             )
 
-            # Populate bar chart
-            add_hbar(axs_bar, 
-                     name, 
-                     missed_waffles, 
-                     "#FF4B4B", 
-                     "Waffles missed")
+    #         # Populate bar chart
+    #         add_hbar(axs_bar, 
+    #                  name, 
+    #                  missed_waffles, 
+    #                  "#FF4B4B", 
+    #                  "Waffles missed")
             
-            add_hbar(axs_bar, 
-                     name, 
-                     late_waffles,
-                     "#FF904B", 
-                     "Waffles too late", 
-                     left=missed_waffles)
+    #         add_hbar(axs_bar, 
+    #                  name, 
+    #                  late_waffles,
+    #                  "#FF904B", 
+    #                  "Waffles too late", 
+    #                  left=missed_waffles)
             
-            add_hbar(axs_bar, 
-                     name, 
-                     double_waffles, 
-                     "#E6D947", 
-                     "Double Waffles", 
-                     left=missed_waffles + late_waffles, alpha=0.4)
+    #         add_hbar(axs_bar, 
+    #                  name, 
+    #                  double_waffles, 
+    #                  "#E6D947", 
+    #                  "Double Waffles", 
+    #                  left=missed_waffles + late_waffles, alpha=0.4)
             
 
-    col1, col2 = st.columns(2)
+    # col1, col2 = st.columns(2)
     
-    # --- Display bar cahart for punishment score ---
-    axs_bar.set_xlabel("Number of Waffels")
-    axs_bar.set_title("Punishment Score")
-    axs_bar.xaxis.set_major_locator(MaxNLocator(integer=True))
-    xmax = axs_bar.get_xlim()[1]
-    axs_bar.set_xlim(right=xmax * 1.1)
+    # # --- Display bar cahart for punishment score ---
+    # axs_bar.set_xlabel("Number of Waffels")
+    # axs_bar.set_title("Punishment Score")
+    # axs_bar.xaxis.set_major_locator(MaxNLocator(integer=True))
+    # xmax = axs_bar.get_xlim()[1]
+    # axs_bar.set_xlim(right=xmax * 1.1)
     
-    handles, labels = axs_bar.get_legend_handles_labels()
-    unique_labels = dict(zip(labels, handles))
-    axs_bar.legend(
-        unique_labels.values(),
-        unique_labels.keys(),
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.2),
-        ncol=len(unique_labels)
-        )
-    col1.pyplot(fig_bar)
+    # handles, labels = axs_bar.get_legend_handles_labels()
+    # unique_labels = dict(zip(labels, handles))
+    # axs_bar.legend(
+    #     unique_labels.values(),
+    #     unique_labels.keys(),
+    #     loc="upper center",
+    #     bbox_to_anchor=(0.5, -0.2),
+    #     ncol=len(unique_labels)
+    #     )
+    # col1.pyplot(fig_bar)
     
     # --- Display "Waffle" chart ---
     # beer_path, attributes = svg2paths('beer-svgrepo-com.svg')
@@ -288,12 +289,12 @@ if n > 0:
 
 
 
-# --- Display calendar ---
-st.header("Calender")
-if st.session_state.events:
-    calendar(events=st.session_state.events,
-             options=calendar_options,
-             custom_css=custom_css,
-             key='calendar')
-else:
-    st.info("No events found. Please upload and process a chat export.")
+# # --- Display calendar ---
+# st.header("Calender")
+# if st.session_state.events:
+#     calendar(events=st.session_state.events,
+#              options=calendar_options,
+#              custom_css=custom_css,
+#              key='calendar')
+# else:
+#     st.info("No events found. Please upload and process a chat export.")
