@@ -51,15 +51,13 @@ def find_chat_object(df, text_obj, start_date=None):
         return filterd_df.reset_index(drop=True)
 
 
-def df_to_json(df, persons_json, output_json):
-    with open(persons_json, "r") as f:
-        persons = json.load(f)
-        color_lookup = {item["name"]: item["color"] for item in persons}
+def df_to_json(df, persons, output_json=None):
+    # Load person-color mapping
+    color_lookup = {key: value["color"] for key, value in persons.items()}
 
     # Ensure timestamp is datetime
     if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
-        df["timestamp"] = pd.to_datetime(
-            df["timestamp"], format="%d-%m-%Y %H:%M")
+        df["timestamp"] = pd.to_datetime(df["timestamp"], format="%d-%m-%Y %H:%M")
 
     # Build events for calendar
     events = []
@@ -67,7 +65,7 @@ def df_to_json(df, persons_json, output_json):
         person = row["person"]
         color = color_lookup.get(person, "gray")
 
-        ts = row["timestamp"]  # already datetime
+        ts = row["timestamp"]
         start_iso = ts.strftime("%Y-%m-%dT%H:%M:%S")
         # Assuming each event lasts 1 minute
         end_iso = ts + datetime.timedelta(minutes=1)
@@ -82,13 +80,8 @@ def df_to_json(df, persons_json, output_json):
             "color": color
         })
 
-    # Load existing events
-    try:
-        with open(output_json, "r") as f:
-            existing_events = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        existing_events = []
-
+    # Load existing events if output_json provided
+    existing_events = []
     # Keep only unique person+date combinations
     existing_keys = {(e["title"], e["start"][:10]) for e in existing_events}
     unique_new_events = [
@@ -97,9 +90,8 @@ def df_to_json(df, persons_json, output_json):
 
     existing_events.extend(unique_new_events)
 
-    # Write everything back
-    with open(output_json, "w") as f:
-        json.dump(existing_events, f, indent=4)
+    # Return combined events instead of writing to a file
+    return existing_events
 
 
 def get_instagram_profile_picture(username):

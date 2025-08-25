@@ -188,9 +188,9 @@ if n > 0:
         
     for  i, name  in enumerate(sort_order):
         person  = st.session_state.persons[name]
-        local_image_path = get_local_image(person)
+        image = get_local_image(person)
 
-        cols[i].image(local_image_path, use_container_width=True)
+        cols[i].image(image, use_container_width=True)
         cols[i].markdown(
             f"""
                 <div style="display:flex; align-items:center; gap:6px;">
@@ -200,6 +200,7 @@ if n > 0:
                 """,
             unsafe_allow_html=True
         )
+        break
 
         if events_loaded:
             filtered_df = df_waffles_grouped[df_waffles_grouped["title"]
