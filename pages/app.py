@@ -180,15 +180,15 @@ if n > 0:
         sort_order = st.session_state.persons
         
     for  i, name  in enumerate(sort_order):
-        person  = st.session_state.persons[name]
-        cols[i].image(persons[name]["picture_url"],
+        st.write(st.session_state.persons[name])
+        cols[i].image(st.session_state.persons[name]["picture_url"],
                  use_container_width=True,
         )
         
         cols[i].markdown(
             f"""
                 <div style="display:flex; align-items:center; gap:6px;">
-                    <div style="width:14px; height:14px; border-radius:50%; background:{person['color']};"></div>
+                    <div style="width:14px; height:14px; border-radius:50%; background:{st.session_state.persons[name]['color']};"></div>
                     <span><b>{name}</b></span>
                 </div>
                 """,
