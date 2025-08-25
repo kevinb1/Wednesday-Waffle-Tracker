@@ -19,8 +19,7 @@ from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 
 
-from functions import load_chat, find_chat_object, df_to_json, get_instagram_profile_picture, \
-    count_wednesdays, add_hbar, render_svg
+from functions import load_chat, find_chat_object, df_to_json, count_wednesdays, add_hbar, render_svg
 
 # --- Streamlit page config ---
 st.set_page_config(page_title="Wednesday Waffle Tracker",
@@ -55,7 +54,7 @@ if "persons" not in st.session_state:
         person: {
             "name": usernames_dict[person]["name"],
             "color": usernames_dict[person].get("color", "not set"),
-            "instagram": usernames_dict[person].get("instagram", "not set")
+            "picture_url": usernames_dict[person].get("picture_url", "not set")
         }
         for person in usernames_dict
     }
@@ -182,12 +181,10 @@ if n > 0:
         
     for  i, name  in enumerate(sort_order):
         person  = st.session_state.persons[name]
-        image = get_instagram_profile_picture(person["instagram"])
-
-        cols[i].markdown(
-            f"<img src='{image}' alt='Instagram Profile Picture' width='200'/>",
-            unsafe_allow_html=True,
+        cols[i].image(persons[name]["picture_url"],
+                 use_container_width=True,
         )
+        
         cols[i].markdown(
             f"""
                 <div style="display:flex; align-items:center; gap:6px;">
@@ -197,7 +194,6 @@ if n > 0:
                 """,
             unsafe_allow_html=True
         )
-        break
 
         if events_loaded:
             filtered_df = df_waffles_grouped[df_waffles_grouped["title"]
