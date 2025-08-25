@@ -76,12 +76,6 @@ IMAGE_DIR = "cached_images"
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
 
-def get_local_image(person):
-    username = person["instagram"]
-    url = get_instagram_profile_picture(username)
-    return url
-
-
 # --- Sidebar for navigation ---
 with st.sidebar:
     st.header("Options and Navigation")
@@ -188,9 +182,12 @@ if n > 0:
         
     for  i, name  in enumerate(sort_order):
         person  = st.session_state.persons[name]
-        image = get_local_image(person)
+        image = get_instagram_profile_picture(person["instagram"])
 
-        cols[i].image(image, use_container_width=True)
+        cols[i].markdown(
+            f"<img src='{image}' alt='Instagram Profile Picture' width='200'/>",
+            unsafe_allow_html=True,
+        )
         cols[i].markdown(
             f"""
                 <div style="display:flex; align-items:center; gap:6px;">
