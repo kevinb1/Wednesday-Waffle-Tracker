@@ -180,7 +180,6 @@ if n > 0:
         sort_order = st.session_state.persons
         
     for  i, name  in enumerate(sort_order):
-        st.write(st.session_state.persons[name])
         cols[i].image(st.session_state.persons[name]["picture_url"],
                  use_container_width=True,
         )
