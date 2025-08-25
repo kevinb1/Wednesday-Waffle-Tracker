@@ -78,13 +78,8 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 
 def get_local_image(person):
     username = person["instagram"]
-    image_path = os.path.join(IMAGE_DIR, f"{username}.jpg")
-    if not os.path.exists(image_path):
-        url = get_instagram_profile_picture(username)
-        response = requests.get(url)
-        with open(image_path, "wb") as f:
-            f.write(response.content)
-    return image_path
+    url = get_instagram_profile_picture(username)
+    return url
 
 
 # --- Sidebar for navigation ---
@@ -194,8 +189,8 @@ if n > 0:
     for  i, name  in enumerate(sort_order):
         person  = st.session_state.persons[name]
         local_image_path = get_local_image(person)
-        img = Image.open(local_image_path)
-        cols[i].image(img, use_container_width=True)
+
+        cols[i].image(local_image_path, use_container_width=True)
         cols[i].markdown(
             f"""
                 <div style="display:flex; align-items:center; gap:6px;">
