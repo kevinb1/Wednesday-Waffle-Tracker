@@ -173,4 +173,18 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
+# Ignore any directory starting with "cached"
+cached*/
+
+# Ignore any directory starting with "WhasApp"
+WhasApp*/
+
+# Ignore any directory starting with ".streamlit"
+.streamlit*/
+
+# Passwords 
+create_passwords.py
+.toml
+.yaml
+
 # End of https://www.toptal.com/developers/gitignore/api/python
