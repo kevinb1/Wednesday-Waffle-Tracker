@@ -180,7 +180,6 @@ if n > 0:
         sort_order = st.session_state.persons
         
     for  i, name  in enumerate(sort_order):
-        st.write(st.session_state.persons[name])
         cols[i].image(st.session_state.persons[name]["picture_url"],
                  use_container_width=True,
         )
@@ -219,47 +218,47 @@ if n > 0:
                 delta_color="normal"
             )
 
-    #         # Populate bar chart
-    #         add_hbar(axs_bar, 
-    #                  name, 
-    #                  missed_waffles, 
-    #                  "#FF4B4B", 
-    #                  "Waffles missed")
+            # Populate bar chart
+            add_hbar(axs_bar, 
+                     name, 
+                     missed_waffles, 
+                     "#FF4B4B", 
+                     "Waffles missed")
             
-    #         add_hbar(axs_bar, 
-    #                  name, 
-    #                  late_waffles,
-    #                  "#FF904B", 
-    #                  "Waffles too late", 
-    #                  left=missed_waffles)
+            add_hbar(axs_bar, 
+                     name, 
+                     late_waffles,
+                     "#FF904B", 
+                     "Waffles too late", 
+                     left=missed_waffles)
             
-    #         add_hbar(axs_bar, 
-    #                  name, 
-    #                  double_waffles, 
-    #                  "#E6D947", 
-    #                  "Double Waffles", 
-    #                  left=missed_waffles + late_waffles, alpha=0.4)
+            add_hbar(axs_bar, 
+                     name, 
+                     double_waffles, 
+                     "#E6D947", 
+                     "Not-wednesday Waffles", 
+                     left=missed_waffles + late_waffles, alpha=0.4)
             
+    if events_loaded:
+        col1, col2 = st.columns(2)
 
-    # col1, col2 = st.columns(2)
-    
-    # # --- Display bar cahart for punishment score ---
-    # axs_bar.set_xlabel("Number of Waffels")
-    # axs_bar.set_title("Punishment Score")
-    # axs_bar.xaxis.set_major_locator(MaxNLocator(integer=True))
-    # xmax = axs_bar.get_xlim()[1]
-    # axs_bar.set_xlim(right=xmax * 1.1)
-    
-    # handles, labels = axs_bar.get_legend_handles_labels()
-    # unique_labels = dict(zip(labels, handles))
-    # axs_bar.legend(
-    #     unique_labels.values(),
-    #     unique_labels.keys(),
-    #     loc="upper center",
-    #     bbox_to_anchor=(0.5, -0.2),
-    #     ncol=len(unique_labels)
-    #     )
-    # col1.pyplot(fig_bar)
+        # --- Display bar cahart for punishment score ---
+        axs_bar.set_xlabel("Number of Waffels")
+        axs_bar.set_title("Punishment Score")
+        axs_bar.xaxis.set_major_locator(MaxNLocator(integer=True))
+        xmax = axs_bar.get_xlim()[1]
+        axs_bar.set_xlim(right=xmax * 1.1)
+        
+        handles, labels = axs_bar.get_legend_handles_labels()
+        unique_labels = dict(zip(labels, handles))
+        axs_bar.legend(
+            unique_labels.values(),
+            unique_labels.keys(),
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.2),
+            ncol=len(unique_labels)
+            )
+        col1.pyplot(fig_bar)
     
     # --- Display "Waffle" chart ---
     # beer_path, attributes = svg2paths('beer-svgrepo-com.svg')
