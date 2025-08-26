@@ -17,6 +17,7 @@ import numpy as np
 import yaml
 from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
+from streamlit_gsheets import GSheetsConnection
 
 
 from functions import load_chat, find_chat_object, df_to_json, count_wednesdays, add_hbar, render_svg
@@ -63,12 +64,12 @@ if "persons" not in st.session_state:
 if "events" not in st.session_state:
         st.session_state.events = []
 
-# # --- Load calendar options and CSS ---
-# with open("calendar_options.json") as f:
-#     calendar_options = json.load(f)
-
-# with open("custom.css") as f:
-#     custom_css = f.read()
+# Update drinks_done in session state
+if "drinks_done" not in st.session_state:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read()
+    
+    st.session_state.drinks_done = dict(zip(df['name'], df['drinks_done']))
 
 # --- Helper: preload and cache images locally ---
 IMAGE_DIR = "cached_images"
@@ -77,21 +78,29 @@ os.makedirs(IMAGE_DIR, exist_ok=True)
 
 # --- Sidebar for navigation ---
 with st.sidebar:
-    st.header("Options and Navigation")
-    go_back = st.button("Go to Login")
+    st.header("Opties en Navigatie")
+    go_back = st.button("Terug naar login")
     if go_back:
         st.switch_page("main.py")
+        
+    dev_acces = st.button("Development")
+    if dev_acces:
+        st.switch_page("pages/editor.py")
+    
+    calender_page = st.button("Naar Kalender")
+    if calender_page:
+        st.switch_page("pages/calender.py")
 
 
 # --- File upload and processing inside a form to avoid reruns ---
 with st.form("chat_form"):
     chat_file = st.file_uploader("Upload WhatsApp chat export", type=["txt"])
-    submit = st.form_submit_button("Process Chat")
+    submit = st.form_submit_button("Chat verwerken")
     st.session_state.chat_file = chat_file
 
     if submit:
         if chat_file is None:
-            msg = st.warning("Please upload a chat export file.")
+            msg = st.warning("Upload een bestand")
             time.sleep(3)
             msg.empty()
         else:
@@ -105,12 +114,12 @@ with st.form("chat_form"):
             # Update session states.json", "r", encoding="utf-8") as f:
             st.session_state.events = events_json
 
-            msg = st.success("Waffles added to database")
+            msg = st.success("Chat verwerkt en toegevoeggd")
             time.sleep(3)
             msg.empty()
 
 # --- Display mathematties ---
-st.header("Mathematties Statistics")
+st.header("Mathematties Ranking")
 n = len(st.session_state.persons)
 if n > 0:
     cols = st.columns(n)
@@ -212,7 +221,7 @@ if n > 0:
             # st.data_editor(filtered_df)
 
             cols[i].metric(
-                label="On time Waffels",
+                label="Optijd verstuurt",
                 value=on_time_waffles,
                 delta=int(on_time_waffles) - st.session_state.wednesdays,
                 delta_color="normal"
@@ -223,28 +232,27 @@ if n > 0:
                      name, 
                      missed_waffles, 
                      "#FF4B4B", 
-                     "Waffles missed")
+                     "Gemist")
             
             add_hbar(axs_bar, 
                      name, 
                      late_waffles,
                      "#FF904B", 
-                     "Waffles too late", 
+                     "Te laat", 
                      left=missed_waffles)
             
             add_hbar(axs_bar, 
                      name, 
                      double_waffles, 
                      "#E6D947", 
-                     "Not-wednesday Waffles", 
+                     "Andere video notes", 
                      left=missed_waffles + late_waffles, alpha=0.4)
-            
+    st.markdown("---")
     if events_loaded:
         col1, col2 = st.columns(2)
 
         # --- Display bar cahart for punishment score ---
-        axs_bar.set_xlabel("Number of Waffels")
-        axs_bar.set_title("Punishment Score")
+        axs_bar.set_xlabel("Straf Atjes")
         axs_bar.xaxis.set_major_locator(MaxNLocator(integer=True))
         xmax = axs_bar.get_xlim()[1]
         axs_bar.set_xlim(right=xmax * 1.1)
@@ -258,31 +266,26 @@ if n > 0:
             bbox_to_anchor=(0.5, -0.2),
             ncol=len(unique_labels)
             )
+        col1.header("Penalties")
         col1.pyplot(fig_bar)
     
-    # --- Display "Waffle" chart ---
-    # beer_path, attributes = svg2paths('beer-svgrepo-com.svg')
-    # beer_marker = parse_path(attributes[0]['d'])
-    # beer_marker.vertices -= beer_marker.vertices.mean(axis=0)
-    # beer_marker = beer_marker.transformed(mpl.transforms.Affine2D().rotate_deg(180))
-    # beer_marker = beer_marker.transformed(mpl.transforms.Affine2D().scale(-1,1))
-    
-    # fig_waffle, axs_waffle =plt.subplots(1, 1, figsize=(6, 3))
-    # axs_waffle.scatter(0,
-    #                    0, 
-    #                    marker=beer_marker,
-    #                    s=300)
-    
-    # col2.pyplot(fig_waffle)
+        # --- Display "Waffle" chart ---
+        drinks_to_go = {}
+        for key, value in st.session_state.drinks_done.items():
+            filtered_df = df_waffles_grouped[df_waffles_grouped["title"]
+                                            == key]
 
+            # Count valid Wednesday waffles
+            on_time_waffles = np.sum(
+                filtered_df["wednesday_count"] - filtered_df["double_wednesday_waffles"])
 
-
-# # --- Display calendar ---
-# st.header("Calender")
-# if st.session_state.events:
-#     calendar(events=st.session_state.events,
-#              options=calendar_options,
-#              custom_css=custom_css,
-#              key='calendar')
-# else:
-#     st.info("No events found. Please upload and process a chat export.")
+            drinks_to_go[key] = (st.session_state.wednesdays - int(on_time_waffles)) - value
+            
+        drinks_to_go = sorted(drinks_to_go.items(), key=lambda x: x[1], reverse=True)
+        
+        col2.header("Atjes te gaan")
+        with col2:
+            for item in drinks_to_go:
+                if item[1] > 0:
+                    string = "🍾" * int(item[1])
+                    st.write(f"**{item[0]}**: {string}")

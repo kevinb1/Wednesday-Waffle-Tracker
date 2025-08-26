@@ -94,18 +94,6 @@ def df_to_json(df, persons, output_json=None):
     return existing_events
 
 
-def get_instagram_profile_picture(username):
-    url = f"https://www.instagram.com/{username}/"
-    response = requests.get(url)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        meta_tag = soup.find('meta', property='og:image')
-        if meta_tag:
-            return meta_tag['content']
-
-    return None
-
-
 def count_wednesdays(start_date, end_date=None):
     if end_date is None:
         end_date = datetime.date.today()
@@ -146,13 +134,9 @@ def render_svg(svg):
     html = r'<img src="data:image/svg+xml;base64,%s"/>' % b64
     st.write(html, unsafe_allow_html=True)
 
+def link_to_google_sheets():
+    pass
+
 
 if __name__ == "__main__":
     pass
-    # pattern = r"^(\d{2}-\d{2}-\d{4} \d{2}:\d{2}) - (.*?): (.*)$"
-    # path = r"C:\Users\kevin\OneDrive\Documenten\Wednesday Waffle Tracker\WhatsApp-chat met +31 6 21672220\WhatsApp-chat met +31 6 21672220.txt"
-
-    # df = load_chat(path, pattern)
-    # df = find_chat_object(df, "Video note")
-    # df_to_json(df, "custom_colors.json")
-    # df.to_excel("chat.xlsx", index=False)
