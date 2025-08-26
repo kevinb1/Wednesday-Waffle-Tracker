@@ -1,0 +1,17 @@
+{
+	"editable": false,
+	"navLinks": false,
+	"selectable": true,
+	"headerToolbar": {
+		"left": "today prev,next",
+		"center": "title",
+		"right": "dayGridDay,dayGridWeek,dayGridMonth"
+	},
+	"initialView": "dayGridMonth",
+	"eventTimeFormat": {
+		"hour": "2-digit",
+		"minute": "2-digit",
+		"hour12": false
+	},
+	"firstday": "1"
+}
