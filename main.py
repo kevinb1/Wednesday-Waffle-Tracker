@@ -36,9 +36,6 @@ def main():
         match st.session_state["name"]:
             case "Vina":
                 st.subheader("Ga eens wat doen!")
-                dev_acces = st.button("Development")
-                if dev_acces:
-                    st.switch_page("pages/editor.py")
             case "Paupau":
                 st.subheader("Paula, je kan niet ALTIJD Jelle de schuld geven")
             case "Jelliebellie":

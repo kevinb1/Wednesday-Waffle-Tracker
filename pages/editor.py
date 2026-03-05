@@ -18,11 +18,12 @@ import yaml
 from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 from streamlit_gsheets import GSheetsConnection
+import datetime
 
 st.set_page_config(page_title="Wednesday Waffle Tracker",
                    layout="wide", page_icon=":waffle:")
 
-st.title("Read Google Sheet as DataFrame")
+st.title("Voortgang bijwerken")
 # --- Sidebar for navigation ---
 with st.sidebar:
     st.header("Opties en Navigatie")        
@@ -30,23 +31,41 @@ with st.sidebar:
     if dev_acces:
         st.switch_page("pages/app.py")
 
-conn = st.connection("gsheets", type=GSheetsConnection)
-df = conn.read()
+cols = st.columns(2, width="stretch")
+cols[1].link_button("Ga naar Google Sheets","https://docs.google.com/spreadsheets/d/1sGugpoTuMUUzrRqjs2R-K-Av695rqk4VXY3gPLmUN6A/edit?gid=0#gid=0")
 
-col1, col2 = st.columns(2)
-name = col1.selectbox(label="Selecteer persoon", options=df.name.unique())
-drinks_added = col2.number_input(label="Vul aantal atjes in", step=1)
-df.loc[df["name"] == name, "drinks_done"] += drinks_added
+refresh = cols[0].button("Refresh", type="primary")
+if refresh:
+    st.cache_data.clear()
+    st.rerun()  
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+df_adjes = conn.read(worksheet="adjes_gedaan")
+df_score = conn.read(worksheet="score")
+
+col1, col2, col3 = st.columns(3)
+name = col1.selectbox(label="Selecteer persoon", options=df_adjes.name.unique())
+drinks_added = -col2.number_input(label="Vul uitgevoerde adjes in", step=1)
+datum_done = col3.date_input(label="Datum atjes gedaan", value=datetime.date.today()).strftime("%d-%m-%Y")
+
 
 apply_changes = st.button("Toepassen")
 
 if apply_changes:
-    conn.update(data=df)
+    new_row = {"name": name, "drinks_done": drinks_added, "datum": datum_done}
+    df_adjes = pd.concat([df_adjes, pd.DataFrame([new_row])], ignore_index=True)
+    
+    conn.update(data=df_adjes)
     st.success("Atjes toegevoegd")
     time.sleep(3)
-    df = conn.read()
+    df_adjes = conn.read()
     if "drinks_done"  in st.session_state:        
-        st.session_state.drinks_done = dict(zip(df['name'], df['drinks_done']))
+        st.session_state.drinks_done = df_adjes
+    st.cache_data.clear()
+    st.rerun()
 
     
-st.data_editor(df)
+st.data_editor(df_adjes)
+st.markdown("----")
+st.title("database")
+st.data_editor(df_score)

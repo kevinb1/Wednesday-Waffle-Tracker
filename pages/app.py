@@ -18,9 +18,12 @@ import yaml
 from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 from streamlit_gsheets import GSheetsConnection
+import copy
+import plotly.express as px
+import plotly.graph_objects as go
 
 
-from functions import load_chat, find_chat_object, df_to_json, count_wednesdays, add_hbar, render_svg
+from functions import load_chat, find_chat_object, count_wednesdays, add_hbar, render_svg
 
 # --- Streamlit page config ---
 st.set_page_config(page_title="Wednesday Waffle Tracker",
@@ -32,17 +35,35 @@ st.title("Wednesday Waffle Tracker")
 plt.style.use('matplotlib_style.mpstyle')
 
 
+
 # --- Session state initialization ---
+conn = st.connection("gsheets", type=GSheetsConnection)
 if "start_date_waffles" not in st.session_state:
     st.session_state.start_date_waffles = "2025-06-11"
+
+# Update drinks_done in session state
+if "drinks_done" not in st.session_state:
+    df_adjes = conn.read(worksheet="adjes_gedaan")
+    st.session_state.drinks_done = df_adjes
+
+# Update timeseries in session state
+df_ts = conn.read(worksheet="score")
+st.session_state.timeseries = df_ts
 
 # Add total number of wednesdays to session state
 if "wednesdays" not in st.session_state:
     # Convert string to date if needed
     start_date_str = st.session_state.start_date_waffles
     start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d").date()
-
-    st.session_state.wednesdays = count_wednesdays(start_date)
+    
+    if st.session_state.timeseries is not None and not st.session_state.timeseries.empty:
+        series = pd.to_datetime(st.session_state.timeseries.timestamp, format="%d-%m-%Y %H:%M:%S")
+        end_date = series.max().date()
+    else:
+        end_date = None
+        
+    st.session_state.wednesdays = count_wednesdays(start_date, 
+                                                   end_date=end_date)
 
 # Add persons to session state
 if "persons" not in st.session_state:
@@ -59,16 +80,6 @@ if "persons" not in st.session_state:
     }
     st.session_state.persons = persons
 
-# Add events to session state
-if "events" not in st.session_state:
-        st.session_state.events = []
-
-# Update drinks_done in session state
-if "drinks_done" not in st.session_state:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    df = conn.read()
-    
-    st.session_state.drinks_done = dict(zip(df['name'], df['drinks_done']))
 
 
 # --- Sidebar for navigation ---
@@ -80,9 +91,14 @@ with st.sidebar:
         st.switch_page("main.py")
     
     # Calender view
-    calender_page = st.button("Naar Kalender")
-    if calender_page:
-        st.switch_page("pages/calender.py")
+    editor_page = st.button("Atjes invoeren")
+    if editor_page:
+        st.switch_page("pages/editor.py")
+    
+    refresh = st.button("Refresh", type="primary")
+    if refresh:
+        st.cache_data.clear()
+        st.rerun()  
 
 
 # --- File upload and processing inside a form to avoid reruns ---
@@ -109,15 +125,25 @@ with st.form("chat_form"):
             df = find_chat_object(
                 df, "Video note", start_date=st.session_state.start_date_waffles)
             
-            # Create a json for the calender
-            events_json = df_to_json(df, st.session_state.persons, st.session_state.events)
-
-            # Update session states.json", "r", encoding="utf-8") as f:
-            st.session_state.events = events_json
-
+            # Only keep timestamp and person
+            df = df[["timestamp", "person"]]
+            df.timestamp.astype(str)
+            
+            
+            # Update timeseries 
+            old_ts = st.session_state.timeseries
+            updated_ts = pd.concat([old_ts, df])
+            updated_ts = updated_ts.drop_duplicates(subset=["timestamp", "person"]).reset_index(drop=True)
+            
+            # Update session state and Gsheets
+            st.session_state.timeseries = updated_ts
+            conn.update(data=updated_ts, worksheet="score")
+            
+            
             msg = st.success("Chat verwerkt en toegevoegd")
             time.sleep(3)
             msg.empty()
+
 
 # --- Display mathematties ---
 st.header("Mathematties Ranking")
@@ -130,32 +156,38 @@ if n > 0:
 
     # Check for loaded events
     events_loaded = False
-    if "events" in st.session_state and st.session_state.events and "chat_file" in st.session_state:
+    if st.session_state.timeseries is not None and not st.session_state.timeseries.empty:
         events_loaded = True
+
         
         # Create dataframe
-        df_waffles = pd.DataFrame(st.session_state.events)
-        df_waffles.drop(columns=["end"], inplace=True)
-        df_waffles.start = pd.to_datetime(df_waffles.start)
+        df_waffles = copy.deepcopy(st.session_state.timeseries)
+        df_waffles.timestamp = pd.to_datetime(df_waffles.timestamp, format="%d-%m-%Y %H:%M:%S")
+        
         
         # Determine which day of the week the video was sent
-        df_waffles["day"] = df_waffles.start.dt.day_name()
-        df_waffles["date"] = df_waffles.start.dt.date
+        df_waffles["day"] = df_waffles.timestamp.dt.day_name()
+        df_waffles["date"] = df_waffles.timestamp.dt.date
+        
+        
         
         # Group waffles by calendar week
-        df_waffles["week_nr"] = df_waffles.start.dt.isocalendar().week
+        df_waffles["week_nr"] = (
+            df_waffles['timestamp'].dt.isocalendar().year.astype(str) + '-' +
+            df_waffles['timestamp'].dt.isocalendar().week.astype(str).str.zfill(2))
+        
+
 
         # Flag waffles that were sent on Wednesday as on time
-        df_waffles["wednesday_entries"] = (
-            df_waffles["day"] == "Wednesday").astype(int)
+        df_waffles["wednesday_entries"] = (df_waffles["day"] == "Wednesday").astype(int)
 
-        df_waffles["not_wednesday_entries"] = (
-            df_waffles["day"] != "Wednesday").astype(int)
-
+        df_waffles["not_wednesday_entries"] = (df_waffles["day"] != "Wednesday").astype(int)
+        
         # Check if multiple waffels are sent in one week
-        df_waffles_grouped = df_waffles.groupby(["week_nr", "title"]).agg(
+        df_waffles_grouped = df_waffles.groupby(["week_nr", "person"]).agg(
             wednesday_count=("wednesday_entries", "sum"),
             not_wednesday_count=("not_wednesday_entries", "sum")).reset_index()
+        
 
         # Late waffles: no Wednesday video, but there are non-Wednesday videos
         df_waffles_grouped["late_waffles"] = 0
@@ -185,10 +217,10 @@ if n > 0:
             - df_waffles_grouped["double_wednesday_waffles"]
         
         # Determine sort order by on time waffles
-        sort_order = df_waffles_grouped.groupby("title")["on_time_waffles"].sum().reset_index()
+        sort_order = df_waffles_grouped.groupby("person")["on_time_waffles"].sum().reset_index()
         sort_order.on_time_waffles =  sort_order.on_time_waffles * -1
         sort_order = sort_order.sort_values(
-            by=["on_time_waffles", "title"], ascending=True)["title"].reset_index(drop=True).tolist()
+            by=["on_time_waffles", "person"], ascending=True)["person"].reset_index(drop=True).tolist()
         
         # Create reverse sort order
         sort_order_reverse = {i : -i for i in range(n)}
@@ -217,7 +249,7 @@ if n > 0:
         # Check for loaded events
         if events_loaded:
             # Filter on name
-            filtered_df = df_waffles_grouped[df_waffles_grouped["title"]
+            filtered_df = df_waffles_grouped[df_waffles_grouped["person"]
                                             == name]
 
             # Count valid Wednesday waffles
@@ -255,22 +287,14 @@ if n > 0:
                      "#FF904B", 
                      "Te laat", 
                      left=missed_waffles)
-            
-            add_hbar(axs_bar, 
-                     name, 
-                     double_waffles, 
-                     "#E6D947", 
-                     "Andere video notes", 
-                     left=missed_waffles + late_waffles, alpha=0.4)
+
     st.markdown("---")
     if events_loaded:
         # --- Show statistics
         st.header("Statistieken")
         # Load from json
-        df_events = pd.DataFrame(st.session_state.events)
-        df_events = df_events.rename(columns={"start": "timestamp"})
-        df_events.timestamp = pd.to_datetime(df_events.timestamp)
-        df_events = df_events.drop(["end", "color"], axis=1)
+        df_events = copy.deepcopy(st.session_state.timeseries)
+        df_events.timestamp = pd.to_datetime(df_events.timestamp, format="%d-%m-%Y %H:%M:%S")
         
     # Determine which day of the week the video was sent
         df_events["day"] = df_events.timestamp.dt.day_name()
@@ -279,8 +303,9 @@ if n > 0:
         df_events["time"] = df_events.timestamp.dt.time
         
         # Group waffles by calendar week
-        df_events["week_nr"] = df_events.timestamp.dt.isocalendar().week
-        
+        df_events["week_nr"] = (
+            df_waffles['timestamp'].dt.isocalendar().year.astype(str) + '-' +
+            df_waffles['timestamp'].dt.isocalendar().week.astype(str).str.zfill(2))
         
         df_wednesday = df_events.loc[df_events.day == "Wednesday"]
 
@@ -288,9 +313,9 @@ if n > 0:
         # --- Everybody sent waffle on time
         st.subheader("Iedereen Optijd")
         # Put to group
-        df_all_sent = df_wednesday[["title", "week_nr"]].groupby("week_nr")["title"].apply(set).reset_index()
+        df_all_sent = df_wednesday[["person", "week_nr"]].groupby("week_nr")["person"].apply(set).reset_index()
         # Filter on all persons sent
-        df_all_sent = df_all_sent[df_all_sent['title'].apply(len) == len(st.session_state.persons)]
+        df_all_sent = df_all_sent[df_all_sent['person'].apply(len) == len(st.session_state.persons)]
         st.metric(
             label="Aantal weken",
                 value=len(df_all_sent),
@@ -302,7 +327,7 @@ if n > 0:
         # --- Earliest Waffle
         col1.subheader("Vroegste Waffle")
         earliest_waffle = df_wednesday.sort_values(by="time").reset_index(drop=True).loc[0]
-        col1.image(st.session_state.persons[earliest_waffle.title]["picture_url"],
+        col1.image(st.session_state.persons[earliest_waffle.person]["picture_url"],
                  width=200,
                  caption =f"Verstuurd om { earliest_waffle.time}")
         
@@ -313,14 +338,14 @@ if n > 0:
         
         latest_waffle = df_latest_waffle.sort_values(by=["day_nr", "timestamp"]).reset_index(drop=True).loc[len(df_latest_waffle) - 1]
         
-        col2.image(st.session_state.persons[latest_waffle.title]["picture_url"],
+        col2.image(st.session_state.persons[latest_waffle.person]["picture_url"],
                    width=200,
                  caption =f"Verstuurd op {latest_waffle.day}, om {latest_waffle.time}")
         
          # --- Most often First (Vaakst als Eerst)
         col3.subheader("Vaakst als Eerste")
         # Count how many times each person was the earliest per day
-        first_counts = df_wednesday.sort_values("timestamp").groupby("week_nr").first()["title"].value_counts()
+        first_counts = df_wednesday.sort_values("timestamp").groupby("week_nr").first()["person"].value_counts()
         most_first_person = first_counts.idxmax()
         col3.image(
             st.session_state.persons[most_first_person]["picture_url"],
@@ -331,7 +356,7 @@ if n > 0:
          # --- Last person 
         col4.subheader("Vaakst als Laatste")
         # Count how many times each person was the latest per week (only Wednesday)
-        last_counts = df_events.sort_values("timestamp").groupby("week_nr").last()["title"].value_counts()
+        last_counts = df_events.sort_values("timestamp").groupby("week_nr").last()["person"].value_counts()
         most_last_person = last_counts.idxmax()
 
         col4.image(
@@ -359,21 +384,24 @@ if n > 0:
             bbox_to_anchor=(0.5, -0.2),
             ncol=len(unique_labels)
             )
-        col1.subheader("Penalties")
+        col1.subheader("Verdeling")
         col1.pyplot(fig_bar)
     
         # --- Display "Waffle" chart ---
         drinks_to_go = {}
-        for key, value in st.session_state.drinks_done.items():
-            filtered_df = df_waffles_grouped[df_waffles_grouped["title"]
-                                            == key]
+        df_adjes = st.session_state.drinks_done
+        for name in st.session_state.drinks_done.name.unique():
+            filtered_df = df_waffles_grouped[df_waffles_grouped["person"]== name]
 
             # Count valid Wednesday waffles
             on_time_waffles = np.sum(
                 filtered_df["wednesday_count"] - filtered_df["double_wednesday_waffles"])
 
-            drinks_to_go[key] = (st.session_state.wednesdays - int(on_time_waffles)) - value
-            
+            df_person_grouped = df_adjes[df_adjes["name"] == name].groupby("name").sum().reset_index() 
+            drinks_to_go[df_person_grouped.name.values[0]] = st.session_state.wednesdays - \
+                                                             on_time_waffles + \
+                                                             df_person_grouped.drinks_done.values[0] 
+
         # Sort
         drinks_to_go = sorted(drinks_to_go.items(), key=lambda x: x[1], reverse=True)
         
@@ -383,4 +411,123 @@ if n > 0:
             for item in drinks_to_go:
                 if item[1] > 0:
                     string = "🍾" * int(item[1])
-                    st.write(f"**{item[0]}**: {string}")
+                    st.write(f"**{item[0]}**: {string} ({item[1]:.0f})")
+
+st.markdown("---")
+# Timeseries
+st.title("Tijdreeksen")
+
+# Radar for adjes waffles
+chart_select = st.radio("Selecteer Meassure", ["Gemiste Waffles", "Straf Atjes"], horizontal=True)
+
+date_range = pd.date_range(start=st.session_state.start_date_waffles, end=datetime.date.today(), freq="W-WED")
+df_xaxis = pd.DataFrame(data={"dates" : date_range})
+
+df_xaxis["week_nr"] = (
+            df_xaxis['dates'].dt.isocalendar().year.astype(str) + '-' +
+            df_xaxis['dates'].dt.isocalendar().week.astype(str).str.zfill(2))
+df_xaxis["value"] = 0
+df_xaxis = df_xaxis.drop(columns=["dates"])
+
+# st.write(df_xaxis)
+
+if chart_select == "Gemiste Waffles":
+    data = df_events
+    fig_ts = go.Figure()
+
+    for name in st.session_state.persons.keys():
+        df_person = data[data["person"] == name].drop(columns=["person"])
+        df_person = df_person[df_person["day"] == "Wednesday"]
+        df_person = df_person.drop_duplicates(subset=["week_nr"], keep="first")
+        df_person = df_person.sort_values(by="week_nr").reset_index(drop=True)
+        df_person["value"] = 1
+
+        df_person_full = pd.merge(
+            left=df_xaxis[["week_nr", "value"]],
+            right=df_person[["week_nr", "value"]],
+            on="week_nr",
+            how="left"
+        )
+
+        df_person_full.fillna(0, inplace=True)
+        df_person_full["value"] = df_person_full.value_x + df_person_full.value_y
+        df_person_full.drop(columns=["value_x", "value_y"], inplace=True)
+        df_person_full["cummulative"] = df_person_full.value.cumsum()
+        
+        df_person_full["week_date"] = pd.to_datetime(
+            df_person_full["week_nr"] + "-1", 
+            format="%G-%V-%u"
+        )
+
+        fig_ts.add_trace(
+            go.Scatter(
+                x=df_person_full["week_date"],
+                y=df_person_full["cummulative"],
+                mode="lines+markers",
+                name=name
+            )
+        )
+
+        fig_ts.update_layout(
+        width=700,
+        dragmode="pan",
+        xaxis=dict(
+            rangeslider=dict(visible=True)
+        ),
+        legend=dict(
+            x=1,
+            y=1,
+            xanchor="left",
+            yanchor="top"
+        )
+    )
+
+    fig_ts.update_xaxes(tickformat="%Y-%V")
+    fig_ts.update_yaxes(fixedrange=False)
+
+    st.plotly_chart(fig_ts, use_container_width=True)
+    
+    
+else:
+    data = df_adjes
+    data.drinks_done = abs(data.drinks_done)
+    
+    data = data.sort_values(["name", "datum"])
+    data["cumulative"] = data.groupby("name")["drinks_done"].cumsum()
+    
+    fig_ts = go.Figure()
+    
+    for name, df_person in data.groupby("name"):
+        fig_ts.add_trace(
+            go.Scatter(
+                x=df_person["datum"],
+                y=df_person["cumulative"],
+                mode="lines+markers",
+                name=name,
+                marker=dict(size=6)
+            )
+        )
+
+    fig_ts.update_layout(
+            width=700,
+            dragmode="pan",
+            xaxis=dict(
+                rangeslider=dict(visible=True)
+            ),
+            legend=dict(
+                x=1,
+                y=1,
+                xanchor="left",
+                yanchor="top"
+            )
+        )
+
+    fig_ts.update_yaxes(fixedrange=False)
+
+    st.plotly_chart(fig_ts, use_contaiter_width=True)
+    
+
+    
+    
+    
+

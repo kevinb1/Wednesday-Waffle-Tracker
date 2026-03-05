@@ -50,50 +50,6 @@ def find_chat_object(df, text_obj, start_date=None):
     else:
         return filterd_df.reset_index(drop=True)
 
-
-def df_to_json(df, persons, output_json=None):
-    # Load person-color mapping
-    color_lookup = {key: value["color"] for key, value in persons.items()}
-
-    # Ensure timestamp is datetime
-    if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
-        df["timestamp"] = pd.to_datetime(df["timestamp"], format="%d-%m-%Y %H:%M")
-
-    # Build events for calendar
-    events = []
-    for _, row in df.iterrows():
-        person = row["person"]
-        color = color_lookup.get(person, "gray")
-
-        ts = row["timestamp"]
-        start_iso = ts.strftime("%Y-%m-%dT%H:%M:%S")
-        # Assuming each event lasts 1 minute
-        end_iso = ts + datetime.timedelta(minutes=1)
-        if end_iso.day > ts.day:
-            end_iso = ts - datetime.timedelta(minutes=2)
-        end_iso = end_iso.strftime("%Y-%m-%dT%H:%M:%S")
-
-        events.append({
-            "title": person,
-            "start": start_iso,
-            "end": end_iso,
-            "color": color
-        })
-
-    # Load existing events if output_json provided
-    existing_events = []
-    # Keep only unique person+date combinations
-    existing_keys = {(e["title"], e["start"][:10]) for e in existing_events}
-    unique_new_events = [
-        e for e in events if (e["title"], e["start"][:10]) not in existing_keys
-    ]
-
-    existing_events.extend(unique_new_events)
-
-    # Return combined events instead of writing to a file
-    return existing_events
-
-
 def count_wednesdays(start_date, end_date=None):
     if end_date is None:
         end_date = datetime.date.today()
