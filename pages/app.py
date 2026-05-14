@@ -102,6 +102,14 @@ with st.sidebar:
 
 
 # --- File upload and processing inside a form to avoid reruns ---
+max_timestamp = pd.to_datetime(
+    st.session_state.timeseries.timestamp,
+    format="%d-%m-%Y %H:%M:%S"
+).max()
+
+st.subheader(f"Laatste datum: {max_timestamp.strftime('%d-%m-%Y')}")
+
+
 with st.form("chat_form"):
     # Create file uploader and add to sesion state
     chat_file = st.file_uploader("Upload WhatsApp chat export", type=["txt"])
