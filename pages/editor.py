@@ -52,15 +52,15 @@ datum_done = col3.date_input(label="Datum atjes gedaan", value=datetime.date.tod
 apply_changes = st.button("Toepassen")
 
 if apply_changes:
-    new_row = {"name": name, "drinks_subtracted": drinks_added, "datum": datum_done}
+    new_row = {"name": name, "drinks_done": drinks_added, "datum": datum_done}
     df_adjes = pd.concat([df_adjes, pd.DataFrame([new_row])], ignore_index=True)
     
     conn.update(data=df_adjes)
     st.success("Atjes toegevoegd")
     time.sleep(3)
     df_adjes = conn.read()
-    if "drinks_subtracted"  in st.session_state:        
-        st.session_state.drinks_subtracted = df_adjes
+    if "drinks_done"  in st.session_state:        
+        st.session_state.drinks_done = df_adjes
     st.cache_data.clear()
     st.rerun()
 

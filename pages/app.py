@@ -41,10 +41,10 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 if "start_date_waffles" not in st.session_state:
     st.session_state.start_date_waffles = "2025-06-11"
 
-# Update drinks_subtracted in session state
-if "drinks_subtracted" not in st.session_state:
+# Update drinks_done in session state
+if "drinks_done" not in st.session_state:
     df_adjes = conn.read(worksheet="adjes_gedaan")
-    st.session_state.drinks_subtracted = df_adjes
+    st.session_state.drinks_done = df_adjes
 
 # Update timeseries in session state
 df_ts = conn.read(worksheet="score")
@@ -399,8 +399,8 @@ if n > 0:
     
         # --- Display "Waffle" chart ---
         drinks_to_go = {}
-        df_adjes = st.session_state.drinks_subtracted
-        for name in st.session_state.drinks_subtracted.name.unique():
+        df_adjes = st.session_state.drinks_done
+        for name in st.session_state.drinks_done.name.unique():
             filtered_df = df_waffles_grouped[df_waffles_grouped["person"]== name]
 
             # Count valid Wednesday waffles
