@@ -295,6 +295,17 @@ if n > 0:
                      "#FF904B", 
                      "Te laat", 
                      left=missed_waffles)
+            
+            # Calculate bonus points
+            drinks = st.session_state.drinks_done
+            drinks = abs(drinks[drinks["name"] == name].drinks_done.sum())
+            bonuspoints = max(0, drinks - (late_waffles + missed_waffles))
+
+            add_hbar(axs_bar, 
+                     name, 
+                     -bonuspoints, 
+                     "green", 
+                     "Bonus")
 
     st.markdown("---")
     if events_loaded:
@@ -383,7 +394,9 @@ if n > 0:
         axs_bar.set_xlabel("Straf Atjes")
         axs_bar.xaxis.set_major_locator(MaxNLocator(integer=True))
         xmax = axs_bar.get_xlim()[1]
-        axs_bar.set_xlim(right=xmax * 1.1)
+        xmin = axs_bar.get_xlim()[0]
+        axs_bar.set_xlim(left=xmin,
+                         right=xmax * 1.1)
         
         handles, labels = axs_bar.get_legend_handles_labels()
         unique_labels = dict(zip(labels, handles))
@@ -394,6 +407,24 @@ if n > 0:
             bbox_to_anchor=(0.5, -0.2),
             ncol=len(unique_labels)
             )
+        
+        for container in axs_bar.containers:
+            value = int(container.datavalues[0])
+
+            for bar, label in zip(container, labels):               
+                # Put label inside if bar is large enough
+                if (value) < 0:
+                    axs_bar.text(
+                        bar.get_x() + value / 2,
+                        bar.get_y() + bar.get_height() / 2,
+                        abs(value),
+                        ha='center',
+                        va='center',
+                        color='white'
+                    )
+                    
+        axs_bar.vlines(x=0, ymin=-1, ymax=8, color="#CECCCC", linewidth=2, linestyles="--")
+            
         col1.subheader("Verdeling")
         col1.pyplot(fig_bar)
     
@@ -425,10 +456,9 @@ if n > 0:
 
 st.markdown("---")
 # Timeseries
-st.title("Tijdreeksen")
+st.title("Waffles Optijd Verstuurd")
 
 # Radar for adjes waffles
-chart_select = st.radio("Selecteer Meassure", ["Gemiste Waffles", "Straf Atjes"], horizontal=True)
 
 date_range = pd.date_range(start=st.session_state.start_date_waffles, end=datetime.date.today(), freq="W-WED")
 df_xaxis = pd.DataFrame(data={"dates" : date_range})
@@ -440,104 +470,57 @@ df_xaxis["value"] = 0
 df_xaxis = df_xaxis.drop(columns=["dates"])
 
 # st.write(df_xaxis)
+data = df_events
+fig_ts = go.Figure()
 
-if chart_select == "Gemiste Waffles":
-    data = df_events
-    fig_ts = go.Figure()
+for name in st.session_state.persons.keys():
+    df_person = data[data["person"] == name].drop(columns=["person"])
+    df_person = df_person[df_person["day"] == "Wednesday"]
+    df_person = df_person.drop_duplicates(subset=["week_nr"], keep="first")
+    df_person = df_person.sort_values(by="week_nr").reset_index(drop=True)
+    df_person["value"] = 1
 
-    for name in st.session_state.persons.keys():
-        df_person = data[data["person"] == name].drop(columns=["person"])
-        df_person = df_person[df_person["day"] == "Wednesday"]
-        df_person = df_person.drop_duplicates(subset=["week_nr"], keep="first")
-        df_person = df_person.sort_values(by="week_nr").reset_index(drop=True)
-        df_person["value"] = 1
+    df_person_full = pd.merge(
+        left=df_xaxis[["week_nr", "value"]],
+        right=df_person[["week_nr", "value"]],
+        on="week_nr",
+        how="left"
+    )
 
-        df_person_full = pd.merge(
-            left=df_xaxis[["week_nr", "value"]],
-            right=df_person[["week_nr", "value"]],
-            on="week_nr",
-            how="left"
-        )
+    df_person_full.fillna(0, inplace=True)
+    df_person_full["value"] = df_person_full.value_x + df_person_full.value_y
+    df_person_full.drop(columns=["value_x", "value_y"], inplace=True)
+    df_person_full["cummulative"] = df_person_full.value.cumsum()
+    
+    df_person_full["week_date"] = pd.to_datetime(
+        df_person_full["week_nr"] + "-1", 
+        format="%G-%V-%u"
+    )
 
-        df_person_full.fillna(0, inplace=True)
-        df_person_full["value"] = df_person_full.value_x + df_person_full.value_y
-        df_person_full.drop(columns=["value_x", "value_y"], inplace=True)
-        df_person_full["cummulative"] = df_person_full.value.cumsum()
-        
-        df_person_full["week_date"] = pd.to_datetime(
-            df_person_full["week_nr"] + "-1", 
-            format="%G-%V-%u"
-        )
-
-        fig_ts.add_trace(
-            go.Scatter(
-                x=df_person_full["week_date"],
-                y=df_person_full["cummulative"],
-                mode="lines+markers",
-                name=name
-            )
-        )
-
-        fig_ts.update_layout(
-        width=700,
-        dragmode="pan",
-        xaxis=dict(
-            rangeslider=dict(visible=True)
-        ),
-        legend=dict(
-            x=1,
-            y=1,
-            xanchor="left",
-            yanchor="top"
+    fig_ts.add_trace(
+        go.Scatter(
+            x=df_person_full["week_date"],
+            y=df_person_full["cummulative"],
+            mode="lines+markers",
+            name=name
         )
     )
 
-    fig_ts.update_xaxes(tickformat="%Y-%V")
-    fig_ts.update_yaxes(fixedrange=False)
-
-    st.plotly_chart(fig_ts, use_container_width=True)
-    
-    
-else:
-    data = df_adjes
-    data.drinks_done = abs(data.drinks_done)
-    
-    data = data.sort_values(["name", "datum"])
-    data["cumulative"] = data.groupby("name")["drinks_done"].cumsum()
-    
-    fig_ts = go.Figure()
-    
-    for name, df_person in data.groupby("name"):
-        fig_ts.add_trace(
-            go.Scatter(
-                x=df_person["datum"],
-                y=df_person["cumulative"],
-                mode="lines+markers",
-                name=name,
-                marker=dict(size=6)
-            )
-        )
-
     fig_ts.update_layout(
-            width=700,
-            dragmode="pan",
-            xaxis=dict(
-                rangeslider=dict(visible=True)
-            ),
-            legend=dict(
-                x=1,
-                y=1,
-                xanchor="left",
-                yanchor="top"
-            )
-        )
+    width=700,
+    dragmode="pan",
+    xaxis=dict(
+        rangeslider=dict(visible=True)
+    ),
+    legend=dict(
+        x=1,
+        y=1,
+        xanchor="left",
+        yanchor="top"
+    )
+)
 
-    fig_ts.update_yaxes(fixedrange=False)
+fig_ts.update_xaxes(tickformat="%Y-%V")
+fig_ts.update_yaxes(fixedrange=False)
 
-    st.plotly_chart(fig_ts, use_contaiter_width=True)
-    
-
-    
-    
-    
-
+st.plotly_chart(fig_ts, use_container_width=True)
